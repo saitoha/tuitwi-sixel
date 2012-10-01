@@ -28,7 +28,8 @@ setup(name='tuitwi',
           # -*- Extra requirements: -*-
           'tweepy',
           'pyyaml',
-          'simplejson'
+          'simplejson',
+          'PIL'
       ],
       entry_points="""
       # -*- Entry points: -*-

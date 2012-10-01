@@ -8,7 +8,14 @@ import unicodedata
 import datetime
 import locale
 import re
+import os
+import sixel
+import urllib
+
 from widechartools import set_wide_chars ,get_wide_chars, adjust_n_width, split_from_width
+
+if os.getenv("TERM").find('xterm') == 0:
+    char_width, char_height = sixel.CellSizeDetector().get_size()
 
 # こんとろーる取り纏め
 # あまりにもひどすぎるのであとでなんとかする
@@ -169,21 +176,29 @@ class FullStatusArea(Control):
 
     def _draw(self):
         if self._status is None: return
+            
+        # tanasinn integration
+        tanasinn_integration = os.getenv("__TANASINN")
+        if tanasinn_integration:
+            thumbnail_width = 10
+        else:
+            thumbnail_width = 0
+
         name = (u'%s(%s)' % (self._status.user.name, self._status.user.screen_name))
         source = self._status.source
         info = (u'%s from %s' % (self._status.created_at+datetime.timedelta(hours=9), source))
-        self._win.addstr(0, 0, adjust_n_width(name, self.width-1, fill=u''))
+        self._win.addstr(0, thumbnail_width, adjust_n_width(name, self.width-1-thumbnail_width, fill=u''))
 
         h, i = 1, 0
         lines = self._status.text.split('\n')
         strings = reduce(lambda x, y: x+y,
-                         map(lambda line: split_from_width(line, self.width-1, translate=False), lines),
+                         map(lambda line: split_from_width(line, self.width-1-thumbnail_width, translate=False), lines),
                          [])
         rem = 0
         while h < self.height-1 and i < len(strings):
             self._win.move(h, 0)
             if rem:
-                self._win.addstr(adjust_n_width(strings[i][:rem]), curses.A_REVERSE)
+                self._win.addstr(h, thumbnail_width, adjust_n_width(strings[i][:rem]), curses.A_REVERSE)
 
             start, end = rem, rem
             target = strings[i]
@@ -193,19 +208,30 @@ class FullStatusArea(Control):
             if self._keyword:
                 while target[start:].find(self._keyword) >= 0:
                     end = start+target[start:].find(self._keyword)
-                    self._win.addstr(adjust_n_width(strings[i][start:end]))
-                    self._win.addstr(adjust_n_width(strings[i][end:min(end+len(self._keyword),
+                    self._win.addstr(h, thumbnail_width, adjust_n_width(strings[i][start:end]))
+                    self._win.addstr(h, thumbnail_width, adjust_n_width(strings[i][end:min(end+len(self._keyword),
                                                                        len(strings[i]))]),
                                      curses.A_REVERSE)
                     start = end+len(self._keyword)
-            self._win.addstr(adjust_n_width(strings[i][start:]))
+            self._win.addstr(h, thumbnail_width, adjust_n_width(strings[i][start:]))
             if end+len(self._keyword) >= len(strings[i]):
                 rem = end+len(self._keyword)-len(strings[i])
             else:
                 rem = 0
             h += 1
             i += 1
-        self._win.addstr(self.height-1, 0, adjust_n_width(info, self.width-1, fill=u''))
+        self._win.addstr(self.height-1, thumbnail_width, adjust_n_width(info, self.width-1-thumbnail_width, fill=u''))
+
+        if tanasinn_integration:
+            y, x = self._win.getbegyx()
+            maxy, maxx = self._win.getmaxyx()
+            writer = sixel.SixelWriter()
+            url = self._status.user.profile_image_url
+            filename = urllib.urlretrieve(url)[0]
+            writer.draw(filename, True,
+                        x + 1, y + 1,
+                        thumbnail_width * char_width,
+                        maxy * char_height) 
 
 class EditLineControl(Control):
     u'''入力部分'''
